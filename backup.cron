@@ -1,5 +1,7 @@
 #! /bin/sh
-BACKUP=/usr/local/bin/backup
+# example script to be placed in /etc/cron.*/
+BACKUP=/usr/local/bin/backup-script
+
 ETC=/etc/backup
 echo "$(date) Backing-up all *.conf in ${ETC}" >> /var/log/backup.cron.log
 for conf in $(ls ${ETC}/*.conf | sort); do
