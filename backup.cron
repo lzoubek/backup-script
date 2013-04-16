@@ -1,0 +1,7 @@
+#! /bin/sh
+BACKUP=/usr/local/bin/backup
+ETC=/etc/backup
+echo "$(date) Backing-up all *.conf in ${ETC}" >> /var/log/backup.cron.log
+for conf in $(ls ${ETC}/*.conf | sort); do
+    $BACKUP $conf
+done

@@ -1,0 +1,78 @@
+# shell-backup script configuration file
+# by oKo $ jeZZ
+# enables creating backup archive and rotating (main functionality)
+# disabling this : you can have multiple machines to distribute your backups on
+
+# 1|0 whether true backup should be done
+# you can create one (with BACKUP_ENABLED="1") config file and the other ones can have (BACKUP_ENABLED="0")
+# the others can define various remote_methods so you can upload same backup files to various hosts 
+BACKUP_ENABLED="1"
+
+# count of files to be reotated
+ARCHIVE_COUNT="5"
+
+# backup type 
+# use "mysql" to backup mysql database
+# or "pgsql" to backup postgres database
+TYPE="testing"
+
+# destination dir to save backup files
+TARDIR="/tmp/shell-backup"
+
+# flag for archiving
+TARFLAG="-cjvf"
+
+# ending of backup file
+TARENDING=".tar.bz2"
+
+# dirs to backup - this appears in archive (ignored when TYPE is set to "mysql" or "pgsql"
+DIRS="/tmp/data/ /tmp/data2"
+
+# Note : Below settings are appliciable only when TYPE is set to "mysql"
+# mysql hostname
+MYSQL_HOST=""
+# mysql user
+MYSQL_USER=""
+# mysql password
+MYSQL_PASS=""
+# list of databases to be ignored (separated by space)
+MYSQL_IGNORE_DB=""
+
+# custom command executed before backup 
+PRE_BACKUP_CMD=""
+# custom command executed after backup
+POST_BACKUP_CMD=""
+
+
+# logdir
+LOGDIR="/var/log/backup/"
+
+# user which will own backup files and optionaly upload archive to remote host
+# set to 1 if you want to log details of backup (list of backup files)
+LOG_DETAILS="0"
+
+# user that will own backup files
+USER="backup-user"
+# group wich will own backup files
+GROUP="backup-user"
+
+# method used for remote upload backup files
+# methods 'scp' and 'rsync' wont work without configuration of ssh keys for `USER` as well as the remote user on REMOTE_HOST
+# values:
+## none : remote backup is not used
+## scp : backup file is uploaded via scp (only the actual backup file is uploaded)
+## rsync : backup's are synced via rsync (all rotated backup files are synced with remote machine) 
+REMOTE_METHOD="none"
+
+# remote host (needs remote ssh to be setup for USER)
+# you can add more remote hosts, note that SCP_OPTS and SSH_OPTS will be shared by them
+REMOTE_HOST="backup-user@remote.host"
+
+# any needed scp options when uploading with scp remote_method 
+# for example SSH listens on different port
+SCP_OPTS="-P 8899"
+
+# any needed ssh options when uploading with scp or rsync method 
+# note that remote dirs need to be created via ssh before scp upload
+# for example SSH listens on different port
+SSH_OPTS="-p 8899"

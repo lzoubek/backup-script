@@ -1,0 +1,240 @@
+#!/bin/bash
+#  by: oKo & jeZZ
+#  
+#
+VERSION="0.3.5"
+###################
+
+###################
+###################
+
+printUsage()
+{
+  echo -e "Backup script v${VERSION}"
+  echo -e "Usage: $0 <config file>"
+  echo -e "Usage: $0 --test-mysql <config file>"
+  echo -e "Usage: $0 --test-scp <config gile>"
+  exit 0
+}
+mysql_get_db_list(){
+  MYSQL="$(which mysql)"
+  MYSQLDUMP="$(which mysqldump)"
+  CHOWN="$(which chown)"
+  CHMOD="$(which chmod)"
+  GZIP="$(which gzip)"
+  TMPDIR="/tmp/shell-backup"
+  # Get all database list first
+  DBS="$($MYSQL -u $MYSQL_USER -h $MYSQL_HOST -p$MYSQL_PASS -Bse 'show databases'  )"
+}
+test_upload() {
+  if [ "$REMOTE_METHOD" == "none" ];
+  then
+    # do not upload
+    echo "Remote uploading disabled in config"
+  elif [ "$REMOTE_METHOD" == "scp" ] || [ "$REMOTE_METHOD" == "rsync" ];
+  then
+    echo " * You sould not answer anything or see error messages"
+    echo " * Uploading 'testfile' to remote host '$REMOTE_HOST'" 
+    echo "OK" > /tmp/testfile
+    su - $USER -c " scp $SCP_OPTS /tmp/testfile $REMOTE_HOST:~"
+    rm /tmp/testfile 
+    echo "cat 'testfile' remotely on host '$REMOTE_HOST' - should see 'OK'"
+    echo "-----"
+    su - $USER -c  " ssh $SSH_OPTS $REMOTE_HOST cat testfile "
+    echo "-----"
+    echo " * Deleting 'testfile' remotely on host '$REMOTE_HOST'"
+    su - $USER -c  " ssh $SSH_OPTS $REMOTE_HOST rm testfile"
+  else 
+    echo "Nothing to test yet"
+  fi
+}
+
+
+
+if [ -z "$1" ]; then
+  printUsage
+elif [ "$1" == "--help" ]; then
+  printUsage
+elif [ "$1" == "--test-mysql" ]; then
+  if [ -z "$2" ]; then
+    printUsage
+  else
+    source "$2"
+    if [ "$TYPE" == "mysql" ]; then
+      echo "You should not be asked for password"
+      mysql_get_db_list
+      echo "Listing mysql databases"
+      for db in ${DBS}; do
+        echo " * $db"
+      done
+      exit 0
+    else
+      echo "Config file is not 'mysql' type, nothing to do"
+      exit 1
+    fi
+  fi
+elif [ "$1" == "--test-scp" ]; then
+  if [ -z "$2" ]; then
+    printUsage
+  else
+    source "$2"
+    test_upload
+    exit 0
+  fi
+
+else
+  source "$1"
+fi
+
+
+TARFILE="backup_${TYPE}_${HOSTNAME}"
+TARURL="${TARDIR}/${TARFILE}"
+if [ "$LOG_DETAILS" == "1" ];
+then
+  FILES_LOGFILE="${LOGDIR}${TYPE}_${HOSTNAME}_$(date +"%d.%m.%Y.%H.%M").log"
+else 
+  FILES_LOGFILE="/dev/null"
+fi
+LOGFILE="/var/log/backup.log"
+ACCES="chown -R ${USER}:${GROUP} ${TARDIR}"
+UPLOAD_SCP="scp ${SCP_OPTS} ${TARURL}-1${TARENDING} ${REMOTE_HOST}:~/${HOSTNAME}/${TYPE}${TARENDING} "
+UPLOAD_CREATEDIRS="ssh ${SSH_OPTS} ${REMOTE_HOST} mkdir -p ${HOSTNAME} && ssh ${SSH_OPTS} ${REMOTE_HOST} mkdir -p ${HOSTNAME}/${TYPE}"
+UPLOAD_RSYNC="rsync -ave \"ssh ${SSH_OPTS}\" --progress --delete ${TARDIR}/ ${REMOTE_HOST}:~/${HOSTNAME}/${TYPE}/"
+for ch1 in "$TYPE" "$TARDIR" "$TARFLAG" "$DIRS" "$LOGDIR" "$USER" "$GROUP" ; do
+  if [ -z "$ch1" ]; then
+    echo -e " ERROR: item is null ! $IFS Please edit script: $0"
+    exit 0
+  fi
+done
+
+for ch2 in $TARDIR $DIRS $LOGDIR ; do
+  if [ -d "/$ch2" ]; then
+    CHD2="ok"
+  else
+    echo -e " ERROR: this dir doesn not exist: $ch2 ! $IFS Please create dir (mkdir $ch2) or edit: $1"
+    exit 0
+  fi
+  if [ $CHD2 = "ok" ]; then
+    if [ -w "/$ch2" ]; then
+      CHD="ok"
+    else
+      echo -e " ERROR: Permission denied this dir: $ch2 ! $IFS Please changing permissions dir $ch2 or edit script: $0"
+      exit 0
+    fi
+  fi
+done
+
+create_archive_count_array() {
+  archive_count=""
+  local num=${ARCHIVE_COUNT} 
+  while [ $num -gt 0 ];
+  do
+    archive_count="${archive_count} ${num}"
+    num=$(($num -1))
+  done
+}
+
+do_upload() {
+  if [ "$REMOTE_METHOD" == "none" ];
+  then
+    # do not upload
+    echo "Remote uploading disabled" >> $LOGFILE
+  elif [ "$REMOTE_METHOD" == "scp" ];
+  then
+    echo "Creating remote dirs on host '${REMOTE_HOST}'" >> $LOGFILE
+    echo $UPLOAD_CREATEDIRS >>$LOGFILE
+    su - $USER -c " $UPLOAD_CREATEDIRS " >> $LOGFILE
+
+    echo "Uploading to remote host '$REMOTE_HOST'" >> $LOGFILE
+    echo $UPLOAD_SCP >> $LOGFILE
+    su - $USER -c " $UPLOAD_SCP " >> $LOGFILE
+
+  elif [ "$REMOTE_METHOD" == "rsync" ];
+  then
+    echo "Creating remote dirs on host '$REMOTE_HOST'" >> $LOGFILE
+    echo $UPLOAD_CREATEDIRS >>$LOGFILE
+    su - $USER -c " $UPLOAD_CREATEDIRS " >> $LOGFILE
+
+    echo "Syncing backup dirs with remote host '$REMOTE_HOST'" >> $LOGFILE
+    echo $UPLOAD_RSYNC >> $LOGFILE
+    su - $USER -c " $UPLOAD_RSYNC " >> $LOGFILE
+
+  else 
+    echo "ERROR: unsupported REMOTE_METHOD $REMOTE_METHOD" >> $LOGFILE
+  fi
+}
+
+
+mysql_backup(){
+  echo -e "performing mysql backup" >> $LOGFILE
+  mysql_get_db_list
+  mkdir -p $TMPDIR
+  for db in ${DBS}
+  do
+    skipdb=-1
+    if [ "$MYSQL_IGNORE_DB" != "" ];
+    then
+      for i in ${MYSQL_IGNORE_DB}
+      do
+        [ "$db" == "$i" ] && skipdb=1 || :
+      done
+    fi
+
+    if [ "$skipdb" == "-1" ] ; then
+      FILE="$TMPDIR/$db.sql"
+      ${MYSQLDUMP} -u ${MYSQL_USER} -h ${MYSQL_HOST} -p${MYSQL_PASS} ${db}  > ${FILE}
+    fi
+  done
+
+
+}
+
+tar_new(){
+  echo -e "create file: ${TARURL}-1${TARENDING}" >> $LOGFILE
+  cd / 
+  case $TYPE in
+    "pgsql")
+      su - postgres -c "pg_dumpall -f /tmp/pg_dump.sql"
+      tar ${TARFLAG} ${TARURL}-1${TARENDING} /tmp/pg_dump.sql > $FILES_LOGFILE && rm -rf /tmp/pg_dump.sql && $ACCES
+      ;;
+    "mysql")
+      mysql_backup
+      tar ${TARFLAG} ${TARURL}-1${TARENDING} $TMPDIR > $FILES_LOGFILE && rm -rdf $TMPDIR && $ACCES
+      ;;
+    *)	
+      tar ${TARFLAG} ${TARURL}-1${TARENDING} ${DIRS} > $FILES_LOGFILE && $ACCES
+      ;;
+  esac    
+}
+
+tar_next(){
+  echo -e "# Start backup scrip in: $HOSTNAME $IFS start: $(date "+%d.%m.%Y %T")" >> $LOGFILE
+  create_archive_count_array
+  for mvfile in $archive_count ; do
+    mvfile2=$(($mvfile + 1))
+    if [ -w  "$TARURL"-"$mvfile""$TARENDING" ];
+    then 
+      mv "$TARURL"-"$mvfile""$TARENDING" "$TARURL"-"$mvfile2""$TARENDING" 
+      echo -e " mv $TARURL-$mvfile"$TARENDING" -> $TARURL-$mvfile2"$TARENDING"" >> $LOGFILE
+    fi
+  done
+  tar_new
+}
+
+echo -e "# Start backup script in: $HOSTNAME $IFS start: $(date "+%d.%m.%Y %T") $IFS " >> $LOGFILE
+echo -e "Running pre-backup-command '${PRE_BACKUP_CMD}'" >> $LOGFILE
+${PRE_BACKUP_CMD} >> $LOGFILE 
+if [ "$BACKUP_ENALBED" == "1" ] || [ -z ${BACKUP_ENABLED} ];
+then
+
+  if [ -f "$TARURL"-1"$TARENDING" ]; then
+    tar_next
+  else
+    tar_new
+  fi
+fi
+do_upload
+echo -e "Running post-backup-command '${POST_BACKUP_CMD}'" >> $LOGFILE
+${POST_BACKUP_CMD} >> $LOGFILE
+echo -e "# Stop: $(date "+%d.%m.%Y %T") $IFS Logfile: $FILES_LOGFILE $IFS \
+  Disk space: $IFS $(df -h $TARDIR) $IFS# END $IFS " >> $LOGFILE
