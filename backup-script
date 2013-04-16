@@ -2,7 +2,7 @@
 #  by: oKo & jeZZ
 #  
 #
-VERSION="0.3.5"
+VERSION="0.3.6"
 ###################
 
 ###################
@@ -87,16 +87,16 @@ else
 fi
 
 
-TARFILE="backup_${TYPE}_${HOSTNAME}"
+TARFILE="${HOSTNAME}_${TYPE}"
 TARURL="${TARDIR}/${TARFILE}"
 if [ "$LOG_DETAILS" == "1" ];
 then
-  FILES_LOGFILE="${LOGDIR}${TYPE}_${HOSTNAME}_$(date +"%d.%m.%Y.%H.%M").log"
+  FILES_LOGFILE="${LOGDIR}/${TYPE}_${HOSTNAME}_$(date +"%d.%m.%Y.%H.%M").log"
 else 
   FILES_LOGFILE="/dev/null"
 fi
 LOGFILE="/var/log/backup.log"
-ACCES="chown -R ${USER}:${GROUP} ${TARDIR}"
+ACCESS="chown -R ${USER}:${GROUP} ${TARDIR}"
 UPLOAD_SCP="scp ${SCP_OPTS} ${TARURL}-1${TARENDING} ${REMOTE_HOST}:~/${HOSTNAME}/${TYPE}${TARENDING} "
 UPLOAD_CREATEDIRS="ssh ${SSH_OPTS} ${REMOTE_HOST} mkdir -p ${HOSTNAME} && ssh ${SSH_OPTS} ${REMOTE_HOST} mkdir -p ${HOSTNAME}/${TYPE}"
 UPLOAD_RSYNC="rsync -ave \"ssh ${SSH_OPTS}\" --progress --delete ${TARDIR}/ ${REMOTE_HOST}:~/${HOSTNAME}/${TYPE}/"
@@ -195,14 +195,14 @@ tar_new(){
   case $TYPE in
     "pgsql")
       su - postgres -c "pg_dumpall -f /tmp/pg_dump.sql"
-      tar ${TARFLAG} ${TARURL}-1${TARENDING} /tmp/pg_dump.sql > $FILES_LOGFILE && rm -rf /tmp/pg_dump.sql && $ACCES
+      tar ${TARFLAG} ${TARURL}-1${TARENDING} /tmp/pg_dump.sql > $FILES_LOGFILE && rm -rf /tmp/pg_dump.sql && $ACCESS
       ;;
     "mysql")
       mysql_backup
-      tar ${TARFLAG} ${TARURL}-1${TARENDING} $TMPDIR > $FILES_LOGFILE && rm -rdf $TMPDIR && $ACCES
+      tar ${TARFLAG} ${TARURL}-1${TARENDING} $TMPDIR > $FILES_LOGFILE && rm -rdf $TMPDIR && $ACCESS
       ;;
     *)	
-      tar ${TARFLAG} ${TARURL}-1${TARENDING} ${DIRS} > $FILES_LOGFILE && $ACCES
+      tar ${TARFLAG} ${TARURL}-1${TARENDING} ${DIRS} > $FILES_LOGFILE && $ACCESS
       ;;
   esac    
 }
@@ -224,7 +224,7 @@ tar_next(){
 echo -e "# Start backup script in: $HOSTNAME $IFS start: $(date "+%d.%m.%Y %T") $IFS " >> $LOGFILE
 echo -e "Running pre-backup-command '${PRE_BACKUP_CMD}'" >> $LOGFILE
 ${PRE_BACKUP_CMD} >> $LOGFILE 
-if [ "$BACKUP_ENALBED" == "1" ] || [ -z ${BACKUP_ENABLED} ];
+if [ "$BACKUP_ENABLED" == "1" ] || [ -z ${BACKUP_ENABLED} ];
 then
 
   if [ -f "$TARURL"-1"$TARENDING" ]; then
