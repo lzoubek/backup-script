@@ -189,13 +189,35 @@ mysql_backup(){
 
 }
 
+pgsql_backup() {
+  echo -e "Performing pgsql backup" >> $LOGFILE
+  TMPDIR="/tmp/backup-pgsql"
+  mkdir -p $TMPDIR
+  chmod 777 $TMPDIR
+  chown postgres $TMPDIR
+
+  #echo "LIST ${PGSQL_DB_LIST}"
+
+  if [ "${PGSQL_DB_LIST}" == "" ];
+  then
+	  su - postgres -c "pg_dumpall -f ${TMPDIR}/pg_dump.sql"
+
+  else
+	  for i in $PGSQL_DB_LIST;
+	  do
+	          FILE="$TMPDIR/$i.sql"
+	          su - postgres -c "pg_dump -d $i -f $FILE"
+	  done
+  fi
+}
+
 tar_new(){
   echo -e "create file: ${TARURL}-1${TARENDING}" >> $LOGFILE
   cd / 
   case $TYPE in
     "pgsql")
-      su - postgres -c "pg_dumpall -f /tmp/pg_dump.sql"
-      tar ${TARFLAG} ${TARURL}-1${TARENDING} /tmp/pg_dump.sql > $FILES_LOGFILE && rm -rf /tmp/pg_dump.sql && $ACCESS
+      pgsql_backup
+      tar ${TARFLAG} ${TARURL}-1${TARENDING} $TMPDIR > $FILES_LOGFILE && rm -rdf $TMPDIR && $ACCESS
       ;;
     "mysql")
       mysql_backup

@@ -38,6 +38,9 @@ MYSQL_PASS=""
 # list of databases to be ignored (separated by space)
 MYSQL_IGNORE_DB=""
 
+# enumerate posgres databases, if not set we dump all databases
+# PGSQL_DB_LIST="db1 db2"
+
 # custom command executed before backup 
 PRE_BACKUP_CMD=""
 # custom command executed after backup
